@@ -1,80 +1,138 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'Import Spanish 2016 general election data into MySQL in a few steps.'
 ---
 
-## Get started in three steps
+This guide walks you through setting up the project, configuring the database connection, and running a full import of the INE `.DAT` fixed-width files.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, make sure you have the following installed and available:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- **MySQL Server** — a running instance accessible over the network (the default config targets `192.168.56.101:3306`)
+- **Java JDK 8 or later**
+- **IntelliJ IDEA** (or any IDE that supports Maven/Gradle Java projects)
+- **MySQL Connector/J** — the official JDBC driver for MySQL ([download from MySQL](https://dev.mysql.com/downloads/connector/j/))
+- The INE election ZIP file: `02201606_MESA.zip`
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Clone the repo and open the project">
+    Clone the repository to your local machine and open it in your IDE.
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone <repository-url>
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    In IntelliJ IDEA, go to **File → Open** and select the project root directory. Make sure the MySQL Connector/J `.jar` is added to the project's classpath (under **File → Project Structure → Libraries**).
+  </Step>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Set up the MySQL database">
+    Connect to your MySQL server and run the schema script to create all required tables.
 
-### Step 3: Go live
+    ```bash
+    mysql -u perepi -p mydb < "Model SQL BD/Taules_eleccions.sql"
+    ```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    This creates the following tables:
 
-## Next steps
+    | Table | Key columns |
+    |---|---|
+    | `comunitats_autonomes` | `comunitat_aut_id`, `nom`, `codi_ine` |
+    | `provincies` | `provincia_id`, `comunitat_aut_id`, `nom`, `codi_ine`, `num_escons` |
+    | `municipis` | `municipi_id`, `nom`, `codi_ine`, `provincia_id`, `districte` |
+    | `eleccions` | `eleccio_id`, `nom`, `data`, `any`, `mes` |
+    | `persones` | `persona_id`, `nom`, `cog1`, `cog2`, `sexe`, `data_naixement`, `dni` |
+    | `candidatures` | `candidatura_id`, `eleccio_id`, `codi_candidatura`, `nom_curt`, `nom_llarg` |
+    | `candidats` | `candidat_id`, `candidatura_id`, `persona_id`, `provincia_id`, `num_ordre`, `tipus` |
+    | `eleccions_municipis` | `eleccio_id`, `municipi_id`, `num_meses`, `cens`, `vots_emesos`, … |
+    | `vots_candidatures_mun` | `eleccio_id`, `municipi_id`, `candidatura_id`, `vots` |
+    | `vots_candidatures_prov` | `provincia_id`, `candidatura_id`, `vots`, `candidats_obtinguts` |
+    | `vots_candidatures_ca` | `comunitat_autonoma_id`, `candidatura_id`, `vots` |
 
-Now that you have your docs running, explore these key features:
+    <Note>
+      Ensure the database `mydb` exists before running the script. Create it with `CREATE DATABASE mydb;` if needed.
+    </Note>
+  </Step>
 
-<CardGroup cols={2}>
+  <Step title="Configure the JDBC connection in Main.java">
+    Open `src/basedades/Main.java` and update the connection string, username, and password to match your MySQL environment.
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+    ```java
+    con = DriverManager.getConnection("jdbc:mysql://192.168.56.101:3306/mydb", "perepi", "pastanaga");
+    ```
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    Replace `192.168.56.101` with the IP address or hostname of your MySQL server. The default port is `3306`. The default database is `mydb`.
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    <Warning>
+      Do not commit credentials to version control. Consider externalising them to environment variables or a configuration file.
+    </Warning>
+  </Step>
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+  <Step title="Place the ZIP file in the ./zips/ directory">
+    The importer expects the source ZIP at a fixed path. Create the `zips` directory at the project root if it does not already exist, then copy your file there.
 
-</CardGroup>
+    ```bash
+    mkdir -p zips
+    cp /path/to/02201606_MESA.zip zips/
+    ```
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+    The extraction code looks for this exact filename:
+
+    ```java
+    String fileName = "./zips/02201606_MESA.zip";
+    ```
+
+    <Note>
+      The importer also requires an empty `fitxers/` directory at the project root. Create it with `mkdir -p fitxers` if it does not exist — extracted `.DAT` files are written there before import.
+    </Note>
+  </Step>
+
+  <Step title="Run Main.main()">
+    Execute the `main` method in `basedades.Main`. In IntelliJ IDEA, right-click `Main.java` and select **Run 'Main.main()'**.
+
+    The program runs in two phases:
+
+    1. **Extraction** — `TractarFitxers.descomprimirDATsZip()` reads `02201606_MESA.zip`, iterates every entry, and copies any file ending in `.DAT` into `./fitxers/`.
+    2. **Import** — `Importacions` methods run sequentially, each parsing the corresponding `.DAT` file and inserting rows into MySQL.
+
+    The import order is fixed and matches foreign-key dependencies:
+
+    ```java
+    Importacions.importarComunitatsAutonomes();
+    Importacions.importarProvincies();
+    Importacions.importarMunicipis();
+    Importacions.importarEleccions();
+    Importacions.importarEleccionsMunicipi();
+    Importacions.importarPersones();
+    Importacions.importarCandidatures();
+    Importacions.importarCandidats();
+    Importacions.importarVotsProvincies();
+    Importacions.importarVotsCandidatures_ca();
+    Importacions.importarVotsMunicipis();
+    ```
+
+    Progress messages are printed to stdout as each `.DAT` file is extracted and each table is populated.
+  </Step>
+
+  <Step title="Verify the import">
+    Once the program exits without errors, connect to MySQL and run a quick sanity check.
+
+    ```sql
+    -- Count imported autonomous communities
+    SELECT COUNT(*) FROM comunitats_autonomes;
+
+    -- Check total valid votes per province
+    SELECT p.nom, SUM(vcp.vots) AS total_vots
+    FROM vots_candidatures_prov vcp
+    JOIN provincies p ON p.provincia_id = vcp.provincia_id
+    GROUP BY p.nom
+    ORDER BY total_vots DESC;
+    ```
+
+    A successful import populates all 11 tables with data from the 2016 Spanish general election.
+
+    <Tip>
+      If a table is empty, check that the corresponding `.DAT` file was extracted correctly into `./fitxers/` and that no exception was printed to the console during the import phase.
+    </Tip>
+  </Step>
+</Steps>

@@ -1,0 +1,84 @@
+---
+title: ZIP extraction
+description: How TractarFitxers.descomprimirDATsZip() unpacks INE .DAT files from the source ZIP archive before the import pipeline runs.
+---
+
+Before any data can be imported, the `.DAT` source files must be extracted from the ZIP archive that the INE distributes. The `TractarFitxers` class provides one static method for this: `descomprimirDATsZip()`.
+
+## What the method does
+
+1. Opens the ZIP archive at `./zips/02201606_MESA.zip` using both a streaming `ZipInputStream` (to iterate entries) and a random-access `ZipFile` (to read individual entry contents).
+2. Iterates over every entry in the archive.
+3. Skips any entry whose filename does not end in `.DAT`.
+4. For entries that pass the filter, copies the entry content to `./fitxers/<filename>` using `Files.copy()`.
+5. Prints a confirmation line for each extracted file.
+6. Closes all streams automatically via try-with-resources.
+
+## Expected inputs and outputs
+
+| Item | Path |
+|------|------|
+| Source ZIP | `./zips/02201606_MESA.zip` |
+| Output directory | `./fitxers/` |
+| Extracted files | All `.DAT` entries present inside the ZIP |
+
+## Full method source
+
+```java
+public static void descomprimirDATsZip() {
+    String fileName = "./zips/02201606_MESA.zip";
+    try (FileInputStream fis = new FileInputStream(fileName);
+         BufferedInputStream bis = new BufferedInputStream(fis);
+         ZipInputStream zis = new ZipInputStream(bis)) {
+            ZipFile zf = new ZipFile(fileName);
+        ZipEntry ze;
+        while ((ze = zis.getNextEntry()) != null) {
+            if (!ze.getName().substring(ze.getName().length() - 4).equals(".DAT")) continue;
+            ZipEntry e = zf.getEntry(ze.getName());
+            InputStream is = zf.getInputStream(e);
+            Files.copy(is, Paths.get("./fitxers/" + ze.getName()));
+            System.out.println("El fitxer: " + ze.getName() + " s'ha afegit a la carpeta \"./fitxers/\"");
+        }
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+}
+```
+
+## How the DAT filter works
+
+The filter checks the last four characters of each ZIP entry name:
+
+```java
+if (!ze.getName().substring(ze.getName().length() - 4).equals(".DAT")) continue;
+```
+
+Any entry whose name does not end in `.DAT` (case-sensitive) is skipped entirely — its content is never read and no file is written to disk. This means non-data files bundled in the archive (such as documentation PDFs or metadata files) are ignored.
+
+<Note>
+  The check is case-sensitive. An entry named `07021606.dat` (lowercase extension) would be skipped. INE archives use uppercase `.DAT` consistently, so this is not a problem in practice.
+</Note>
+
+## Dual-handle approach
+
+The method opens the same ZIP file twice — once as a `ZipInputStream` for sequential entry iteration, and once as a `ZipFile` for content access. This is because `ZipInputStream` does not always provide reliable access to entry content (particularly for compressed entries), whereas `ZipFile` provides a proper `InputStream` per entry via `zf.getInputStream(e)`.
+
+<Warning>
+  `Files.copy()` will throw a `FileAlreadyExistsException` if a file with the same name already exists in `./fitxers/`. The method does not pass `StandardCopyOption.REPLACE_EXISTING`, so running extraction a second time without deleting the previously extracted files will cause an `IOException`.
+</Warning>
+
+## Console output
+
+A successful extraction prints one line per extracted `.DAT` file:
+
+```
+El fitxer: 02021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 03021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 04021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 05021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 06021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 07021606.DAT s'ha afegit a la carpeta "./fitxers/"
+El fitxer: 08021606.DAT s'ha afegit a la carpeta "./fitxers/"
+```
+
+If the ZIP file is missing or unreadable, the `catch` block prints the stack trace to standard error and the method returns without extracting anything.

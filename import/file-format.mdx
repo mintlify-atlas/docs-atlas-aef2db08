@@ -1,0 +1,123 @@
+---
+title: File format
+description: Reference for the INE fixed-width .DAT file format used as input to the Eleccions Generals import pipeline.
+---
+
+All source data comes from the Spanish National Statistics Institute (INE) as fixed-width plain-text files with a `.DAT` extension. Each line in a file represents one record. Fields are not delimited — they are read by character position and length.
+
+## The `llegirSegonsLlargada` utility
+
+All field extraction is handled by a single private helper method in `Importacions.java`:
+
+```java
+private static String llegirSegonsLlargada(int longiInci, int llargadaALlegir, String st) {
+    String stringTornar = "";
+    longiInci--;
+    for (int i = 0; i < llargadaALlegir; ++i, ++longiInci) {
+        stringTornar += String.valueOf(st.charAt(longiInci));
+    }
+    return stringTornar;
+}
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `longiInci` | Start position of the field, **1-indexed**. The method subtracts 1 internally before accessing the character array. |
+| `llargadaALlegir` | Number of characters to read. |
+| `st` | The full text of the current line being processed. |
+
+The return value is always a `String`. Callers cast to `int` with `Integer.parseInt()` where a numeric value is needed, and call `.trim()` to strip trailing spaces from text fields.
+
+## Field positions by file
+
+### 02021606.DAT — Election metadata
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `dia` | 13 | 2 | int | Day of election |
+| `mes` | 15 | 2 | int | Month of election |
+| `any` | 17 | 4 | int | Year of election |
+
+### 03021606.DAT — Candidatures
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `any` | 3 | 4 | int | Year (used to look up `eleccio_id`) |
+| `mes` | 7 | 2 | int | Month (used to look up `eleccio_id`) |
+| `codi_candidatura` | 9 | 6 | string | Party/coalition code |
+| `nom_curt` | 15 | 50 | string | Short name |
+| `nom_llarg` | 65 | 150 | string | Long name |
+| `codi_acumulacio_provincia` | 215 | 6 | string | Accumulation code (province level) |
+| `codi_acumulacio_ca` | 221 | 6 | string | Accumulation code (autonomous community level) |
+| `codi_acumulacio_nacional` | 227 | 6 | string | Accumulation code (national level) |
+
+### 04021606.DAT — Persons and candidates
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `candidatura_codi` | 16 | 6 | string | Used to look up `candidatura_id` |
+| `num_ordre` | 22 | 3 | int | Candidate list position |
+| `tipus` | 25 | 1 | string | `T` (titular) or `S` (substitut) |
+| `nom` | 26 | 25 | string | First name |
+| `cog1` | 51 | 25 | string | First surname |
+| `cog2` | 76 | 25 | string | Second surname |
+| `dia` | 102 | 2 | int | Day of birth |
+| `mes` | 104 | 2 | int | Month of birth |
+| `any` | 106 | 4 | int | Year of birth |
+| `provincia_ine` | 10 | 2 | int | Province INE code (for `importarCandidats`) |
+
+### 05021606.DAT — Municipalities
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `codi_ine_provincia` | 12 | 2 | int | Province INE code |
+| `codi_ine_municipi` | 14 | 3 | int | Municipality INE code |
+| `districte` | 17 | 2 | int | District code; `99` marks main municipality rows |
+| `nom` | 19 | 100 | string | Municipality name |
+| `num_meses` | 137 | 5 | int | Number of polling stations |
+| `cens` | 150 | 8 | int | Registered voters |
+| `vots_blanc` | 190 | 8 | int | Blank votes |
+| `vots_nuls` | 198 | 8 | int | Null votes |
+| `vots_candidatures` | 206 | 8 | int | Votes cast for candidatures |
+
+### 06021606.DAT — Votes per municipality
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `any` | 3 | 4 | int | Year (used to look up `eleccio_id`) |
+| `mes` | 7 | 2 | int | Month (used to look up `eleccio_id`) |
+| `provincia_ine` | 10 | 2 | int | Province INE code |
+| `municipi_ine` | 12 | 3 | int | Municipality INE code |
+| `candidatura_codi` | 17 | 6 | string | Party code |
+| `vots` | 23 | 8 | int | Votes received |
+
+### 07021606.DAT — Provinces and autonomous communities
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `codi_ine_comunitat` | 10 | 2 | int | Autonomous community INE code |
+| `codi_ine` | 12 | 2 | int | Province INE code; `99` means the row is a community-level summary |
+| `nom` | 15 | 50 | string | Name of province or autonomous community |
+| `num_escons` | 150 | 6 | int | Number of seats (provinces only) |
+
+### 08021606.DAT — Votes per province / autonomous community
+
+| Field | Position | Length | Type | Notes |
+|-------|----------|--------|------|-------|
+| `comunitat_autonoma_ine` | 10 | 2 | int | Autonomous community INE code |
+| `provincia_ine` | 12 | 2 | int | Province INE code; `99` means community-level row |
+| `codi_candidatura` | 15 | 6 | string | Party code |
+| `vots` | 21 | 8 | int | Votes received |
+| `candidats_obtinguts` | 29 | 5 | int | Seats won |
+
+## Special parsing rules
+
+**Catalan name connector.** When the first surname (`cog1`) read from `04021606.DAT` equals `"i"`, the connector is actually the conjunction between a compound first name and the real surname. In this case, the code splits `nom` into the actual first name and treats the second word as `cog1`.
+
+**District filtering.** Both `importarMunicipis()` and `importarEleccionsMunicipi()` process `05021606.DAT` but only insert rows where `districte == 99`. These rows represent the whole municipality, not individual sub-districts. `importarVotsMunicipis()` and `importarVotsProvincies()` apply the same filter with their respective district fields.
+
+**Null birth dates.** In `importarPersones()`, if the year field reads `0` the `data_naixement` column is set to `NULL` instead of constructing an invalid date.
+
+**Community vs. province rows in 07021606.DAT.** A row is imported as an autonomous community when `codi_ine == 99` and `codi_ine_comunitat != 99`. A row is imported as a province when both codes are not `99`.
+
+**Community-level votes in 08021606.DAT.** `importarVotsCandidatures_ca()` imports only rows where `comunitat_autonoma_ine != 99` AND `provincia_ine == 99`, i.e. the aggregated community totals rather than individual province breakdowns.

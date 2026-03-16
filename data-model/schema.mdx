@@ -1,0 +1,227 @@
+---
+title: Schema reference
+description: Full column-level documentation for every table in the Eleccions Generals MySQL database, including types, constraints, indexes, and foreign key relationships.
+---
+
+This page documents every column in the `mydb` database. Tables are grouped by category. For a high-level overview and entity-relationship diagram, see the [data model overview](/data-model/overview).
+
+<Note>
+  The database uses MySQL InnoDB. All tables with foreign keys require the referenced table to be populated first. See the [import guide](/import/overview) for the correct load order.
+</Note>
+
+---
+
+## Geographic tables
+
+### `comunitats_autonomes`
+
+Stores Spain's 17 autonomous communities. Each row is identified by both an internal auto-increment key and the official two-character INE code.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `comunitat_aut_id` | `TINYINT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `nom` | `VARCHAR(45)` | Nullable | Display name of the autonomous community. |
+| `codi_ine` | `CHAR(2)` | `NOT NULL`, `UNIQUE` (`uk_com_aut_codi_ine`) | Two-digit INE code uniquely identifying the community. |
+
+**Indexes:** `PRIMARY KEY (comunitat_aut_id)`, unique index `uk_com_aut_codi_ine (codi_ine)`.
+
+---
+
+### `provincies`
+
+Stores Spain's 52 provinces. Each province belongs to exactly one autonomous community and carries the seat count used for D'Hondt seat allocation.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `provincia_id` | `TINYINT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `comunitat_aut_id` | `TINYINT UNSIGNED` | `NOT NULL`, FK → `comunitats_autonomes` | The autonomous community this province belongs to. |
+| `nom` | `VARCHAR(45)` | Nullable | Display name of the province. |
+| `codi_ine` | `CHAR(2)` | `NOT NULL`, `UNIQUE` (`uk_provincies_codi_ine`) | Two-digit INE code uniquely identifying the province. |
+| `num_escons` | `TINYINT UNSIGNED` | Nullable | Number of congressional seats allocated to this province. |
+
+**Indexes:** `PRIMARY KEY (provincia_id)`, unique index `uk_provincies_codi_ine (codi_ine)`.
+
+**Foreign keys:** `fk_provincies_comunitats_autonomes` — `comunitat_aut_id` references `comunitats_autonomes(comunitat_aut_id)`.
+
+<Tip>
+  `num_escons` reflects the statutory seat allocation per province. Barcelona, Madrid, Valencia, and Seville have the highest allocations. Ceuta and Melilla each have 1.
+</Tip>
+
+---
+
+### `municipis`
+
+Stores all Spanish municipalities. Each municipality belongs to one province. The `districte` column identifies the municipal district within large cities; it is set to `99` when no district subdivision applies.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `municipi_id` | `SMALLINT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `nom` | `VARCHAR(100)` | Nullable | Display name of the municipality. |
+| `codi_ine` | `CHAR(3)` | — | Three-digit INE code identifying the municipality within its province. Not globally unique — use together with `provincia_id`. |
+| `provincia_id` | `TINYINT UNSIGNED` | `NOT NULL`, FK → `provincies` | The province this municipality belongs to. |
+| `districte` | `CHAR(2)` | Nullable | Municipal district number, or `99` if no district subdivision exists. |
+
+**Indexes:** `PRIMARY KEY (municipi_id)`.
+
+**Foreign keys:** `fk_municipis_provincies` — `provincia_id` references `provincies(provincia_id)`.
+
+<Warning>
+  `codi_ine` on `municipis` is a three-digit code scoped to the province. To form the full five-digit INE municipality code, concatenate the province `codi_ine` with the municipality `codi_ine`.
+</Warning>
+
+---
+
+## Electoral tables
+
+### `eleccions`
+
+Records each election event. The `any` and `mes` columns are generated automatically from the `data` column and do not need to be set during import.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `eleccio_id` | `TINYINT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `nom` | `VARCHAR(45)` | Nullable | Human-readable name for the election (e.g., "Eleccions Generals 2016"). |
+| `data` | `DATE` | `NOT NULL` | Date on which the election was held. |
+| `any` | `YEAR` | Generated (virtual) | Year extracted from `data` via `YEAR(data)`. |
+| `mes` | `TINYINT` | Generated (stored) | Month extracted from `data` via `MONTH(data)`. |
+
+**Indexes:** `PRIMARY KEY (eleccio_id)`.
+
+---
+
+### `eleccions_municipis`
+
+Stores the aggregate vote summary for each municipality in each election. This table provides the headline figures — census size, turnout, and vote validity breakdown — before any party-level breakdown.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `eleccio_id` | `TINYINT UNSIGNED` | `PRIMARY KEY` (composite) | Election identifier. |
+| `municipi_id` | `SMALLINT UNSIGNED` | `PRIMARY KEY` (composite) | Municipality identifier. |
+| `num_meses` | `SMALLINT UNSIGNED` | Nullable | Number of polling tables (meses electorals) in the municipality. |
+| `cens` | `INT UNSIGNED` | Nullable | Total number of registered voters (census) in the municipality. |
+| `vots_emesos` | `INT UNSIGNED` | Nullable | Total votes cast (turnout). |
+| `vots_valids` | `INT UNSIGNED` | Nullable | Total valid votes (includes blank votes). |
+| `vots_candidatures` | `INT UNSIGNED` | Nullable | Votes cast for any candidate list (excludes blank and null). |
+| `vots_blanc` | `INT UNSIGNED` | Nullable | Blank votes cast. |
+| `vots_nuls` | `INT UNSIGNED` | Nullable | Null (invalid) votes cast. |
+
+**Indexes:** `PRIMARY KEY (eleccio_id, municipi_id)`.
+
+<Note>
+  The relationship `vots_valids = vots_candidatures + vots_blanc` holds by definition. `vots_emesos = vots_valids + vots_nuls`.
+</Note>
+
+---
+
+### `persones`
+
+Stores the personal details of every individual who appears on a candidate list. A person may appear as a candidate in multiple elections or for different parties, so this table is intentionally decoupled from `candidats`.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `persona_id` | `INT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `nom` | `VARCHAR(30)` | Nullable | Given name. |
+| `cog1` | `VARCHAR(30)` | Nullable | First surname. |
+| `cog2` | `VARCHAR(30)` | Nullable | Second surname. |
+| `sexe` | `ENUM('M', 'F')` | Nullable | Sex: `M` = Masculí (male), `F` = Femení (female). |
+| `data_naixement` | `DATE` | Nullable | Date of birth. |
+| `dni` | `CHAR(10)` | `UNIQUE` (`uk_candidats_dni`) | National identity document number. Unique across all persons. |
+
+**Indexes:** `PRIMARY KEY (persona_id)`, unique index `uk_candidats_dni (dni)`.
+
+---
+
+### `candidatures`
+
+Represents a political party or electoral coalition as it appears in a specific election. The accumulation code columns link regional party instances to their provincial, autonomous community, and national parent groups.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `candidatura_id` | `INT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `eleccio_id` | `TINYINT UNSIGNED` | `NOT NULL`, FK → `eleccions` | The election this candidature participates in. |
+| `codi_candidatura` | `CHAR(6)` | Nullable | INE candidature code. |
+| `nom_curt` | `VARCHAR(50)` | Nullable | Party acronym or short name (sigles). |
+| `nom_llarg` | `VARCHAR(150)` | Nullable | Full official party name (denominació). |
+| `codi_acumulacio_provincia` | `CHAR(6)` | Nullable | Links this candidature to its provincial-level accumulation group. |
+| `codi_acumulacio_ca` | `CHAR(6)` | Nullable | Links this candidature to its autonomous-community-level accumulation group. |
+| `codi_acumulario_nacional` | `CHAR(6)` | Nullable | Links this candidature to its national-level accumulation group. |
+
+**Indexes:** `PRIMARY KEY (candidatura_id)`.
+
+**Foreign keys:** `eleccio_id` references `eleccions(eleccio_id)`.
+
+<Note>
+  The three accumulation code columns (`codi_acumulacio_*`) are sourced directly from the INE data files. They allow vote totals to be summed across regional variants of the same national party.
+</Note>
+
+---
+
+### `candidats`
+
+Records the placement of a person on a specific party list for a specific province. Each row links a `persona_id` to a `candidatura_id` and `provincia_id`, with their position number and whether they are a titular or substitute candidate.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `candidat_id` | `BIGINT UNSIGNED` | `PRIMARY KEY`, `AUTO_INCREMENT` | Internal surrogate key. |
+| `candidatura_id` | `INT UNSIGNED` | `NOT NULL`, FK → `candidatures` | The party list this candidate appears on. |
+| `persona_id` | `INT UNSIGNED` | `NOT NULL`, FK → `persones` | The person standing as a candidate. |
+| `provincia_id` | `TINYINT UNSIGNED` | `NOT NULL`, FK → `provincies` | The province constituency for this list. |
+| `num_ordre` | `TINYINT` | Nullable | Position of the candidate on the list (1 = top of list). |
+| `tipus` | `ENUM('T', 'S')` | Nullable | Candidate type: `T` = Titular (principal), `S` = Suplent (substitute). |
+
+**Indexes:** `PRIMARY KEY (candidat_id)`.
+
+**Foreign keys:**
+- `candidatura_id` references `candidatures(candidatura_id)`
+- `persona_id` references `persones(persona_id)`
+- `provincia_id` references `provincies(provincia_id)`
+
+---
+
+## Vote tracking tables
+
+### `vots_candidatures_mun`
+
+Stores the number of votes each party received in each municipality for each election. This is the most granular vote table. The composite primary key enforces one row per election–municipality–party combination.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `eleccio_id` | `TINYINT UNSIGNED` | `PRIMARY KEY` (composite) | Election identifier. |
+| `municipi_id` | `SMALLINT UNSIGNED` | `PRIMARY KEY` (composite) | Municipality identifier. |
+| `candidatura_id` | `INT UNSIGNED` | `PRIMARY KEY` (composite) | Party or coalition identifier. |
+| `vots` | `INT UNSIGNED` | Nullable | Number of votes received by the party in this municipality. |
+
+**Indexes:** `PRIMARY KEY (eleccio_id, municipi_id, candidatura_id)`.
+
+---
+
+### `vots_candidatures_prov`
+
+Stores vote totals and seat outcomes per party per province. This is the only table that records seat assignments (`candidats_obtinguts`), as seats are allocated at province level under the D'Hondt method.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `provincia_id` | `TINYINT UNSIGNED` | `PRIMARY KEY` (composite) | Province identifier. |
+| `candidatura_id` | `INT UNSIGNED` | `PRIMARY KEY` (composite) | Party or coalition identifier. |
+| `vots` | `INT UNSIGNED` | Nullable | Total votes received by the party in this province. |
+| `candidats_obtinguts` | `SMALLINT UNSIGNED` | Nullable | Number of seats (candidates elected) won by the party in this province. |
+
+**Indexes:** `PRIMARY KEY (provincia_id, candidatura_id)`.
+
+<Tip>
+  Summing `candidats_obtinguts` across all provinces for a given `candidatura_id` gives the party's total seats in Congress.
+</Tip>
+
+---
+
+### `vots_candidatures_ca`
+
+Stores vote totals per party per autonomous community. This table contains no seat data — it is used for regional-level analysis only.
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `comunitat_autonoma_id` | `TINYINT UNSIGNED` | `PRIMARY KEY` (composite) | Autonomous community identifier. |
+| `candidatura_id` | `INT UNSIGNED` | `PRIMARY KEY` (composite) | Party or coalition identifier. |
+| `vots` | `INT UNSIGNED` | Nullable | Total votes received by the party in this autonomous community. |
+
+**Indexes:** `PRIMARY KEY (comunitat_autonoma_id, candidatura_id)`.

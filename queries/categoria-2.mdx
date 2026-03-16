@@ -1,0 +1,49 @@
+---
+title: Categoria 2 — INNER JOIN and LEFT JOIN
+description: SQL queries using INNER JOIN and LEFT JOIN to combine data across the elections database tables, linking candidates, parties, provinces, and vote records.
+---
+
+Categoria 2 focuses on multi-table queries using `INNER JOIN` and `LEFT JOIN`. These are the primary mechanism for combining related data that is spread across separate tables in the relational schema.
+
+## What joins do in this context
+
+The elections database is normalized across 11 tables. No single table contains all the information needed for meaningful analysis — for example, `vots_candidatures_prov` stores votes per party per province, but holds only foreign key IDs, not names. Joins reconstruct the complete picture by linking tables through their shared keys.
+
+## Key join relationships
+
+The following table relationships are used throughout this category:
+
+<AccordionGroup>
+  <Accordion title="candidats ↔ persones">
+  `candidats` records which person stands as a candidate for which party in which province. Joining `candidats` with `persones` on `persona_id` retrieves personal details — name, DNI, date of birth, and gender — for each candidate.
+  </Accordion>
+
+  <Accordion title="candidats ↔ candidatures">
+  `candidats` links to `candidatures` via `candidatura_id`. This join resolves the party or coalition a candidate belongs to, providing the short and long party name.
+  </Accordion>
+
+  <Accordion title="vots_candidatures_prov ↔ provincies">
+  `vots_candidatures_prov` stores vote and seat totals keyed by `provincia_id`. Joining with `provincies` replaces the numeric ID with the province name and INE code.
+  </Accordion>
+
+  <Accordion title="vots_candidatures_prov ↔ candidatures">
+  Joining `vots_candidatures_prov` with `candidatures` on `candidatura_id` attaches the party name to each vote record, making results human-readable.
+  </Accordion>
+
+  <Accordion title="municipis ↔ provincies">
+  `municipis` references `provincia_id`. Joining with `provincies` allows municipality-level queries to include province-level context such as name and seat count.
+  </Accordion>
+</AccordionGroup>
+
+## INNER JOIN vs LEFT JOIN
+
+| Join type | Rows returned |
+|---|---|
+| `INNER JOIN` | Only rows where the join condition matches in **both** tables. Unmatched rows are excluded. |
+| `LEFT JOIN` | All rows from the **left** table, with `NULL` in columns from the right table where no match exists. |
+
+`LEFT JOIN` is particularly useful in this dataset for cases such as listing all candidates including those who may not yet have vote records, or listing all provinces even if no party obtained seats there.
+
+<Note>
+The specific queries for this category are maintained in the project source file `Consultes_Categoria_2.md`. Refer to that file for the complete, tested query list.
+</Note>

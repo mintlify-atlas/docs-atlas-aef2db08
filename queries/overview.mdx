@@ -1,0 +1,45 @@
+---
+title: SQL queries overview
+description: A structured library of SQL queries against the Eleccions Generals database, organized into four categories covering aggregation, JOINs, subqueries, and window functions.
+---
+
+The SQL query library demonstrates a range of MySQL techniques applied to the elections database (`mydb`). Queries are grouped into four categories, each targeting a specific family of SQL features.
+
+<CardGroup cols={2}>
+  <Card title="Categoria 1" icon="sigma" href="/queries/categoria-1">
+    Aggregation, ordering, string functions, and operators. Ten queries covering `COUNT`, `AVG`, `GROUP BY`, `CONCAT`, `LIKE`, `RLIKE`, `YEAR()`, and more.
+  </Card>
+  <Card title="Categoria 2" icon="link" href="/queries/categoria-2">
+    `INNER JOIN` and `LEFT JOIN` operations linking candidates, parties, provinces, and vote tables.
+  </Card>
+  <Card title="Categoria 3" icon="brackets-curly" href="/queries/categoria-3">
+    Subqueries — nested `SELECT` statements used to filter, compare, and derive values against the elections schema.
+  </Card>
+  <Card title="Categoria 4" icon="chart-bar" href="/queries/categoria-4">
+    Window functions using `OVER` and `PARTITION BY` to compute running aggregates across partitions without collapsing rows.
+  </Card>
+</CardGroup>
+
+## Database tables referenced
+
+All queries run against the `mydb` MySQL database. The tables most frequently referenced across the query library are:
+
+| Table | Contents |
+|---|---|
+| `persones` | Personal data for candidates: name, surnames, DNI, date of birth, gender |
+| `candidatures` | Political parties and coalitions, including short and long names |
+| `candidats` | Assignments linking a person to a party and province for a given election |
+| `provincies` | The 52 Spanish provinces with INE codes and seat (`num_escons`) allocations |
+| `municipis` | Municipalities, each linked to a province |
+| `eleccions_municipis` | Per-municipality vote totals: valid votes, blank votes, null votes, polling stations |
+| `vots_candidatures_prov` | Votes and seats won per party per province |
+| `vots_candidatures_mun` | Votes per party per municipality |
+| `vots_candidatures_ca` | Votes per party per autonomous community |
+
+For the full schema including column definitions and foreign key relationships, see the [data model reference](/data-model/overview).
+
+## MySQL version requirements
+
+<Note>
+This query library requires **MySQL 8.0 or later**. Categoria 4 uses window functions (`OVER`, `PARTITION BY`) which are not available in MySQL 5.x. The data model also uses `GENERATED` columns, which require MySQL 5.7+.
+</Note>

@@ -1,0 +1,108 @@
+---
+title: Running imports
+description: Step-by-step guide to executing the full Eleccions Generals data import sequence, from ZIP extraction to loading all database tables.
+---
+
+Follow the steps below to perform a complete import. Each step must succeed before moving to the next.
+
+<Warning>
+  Imports are designed to run **once** against an empty schema. Running any import method a second time will insert duplicate rows and violate `UNIQUE` constraints, causing SQL errors. If you need to re-import, truncate the affected tables first.
+</Warning>
+
+## Prerequisites
+
+Before starting, confirm the following:
+
+- MySQL is running and reachable at `192.168.56.101`.
+- The database `mydb` exists and all tables have been created from the schema DDL.
+- The user `perepi` has `INSERT` privileges on all tables.
+- The ZIP archive `./zips/02201606_MESA.zip` is present in the project directory.
+- The `./fitxers/` directory exists and is writable.
+
+## Import steps
+
+<Steps>
+  <Step title="Extract DAT files from ZIP">
+    Call `TractarFitxers.descomprimirDATsZip()` to unpack all `.DAT` files from `./zips/02201606_MESA.zip` into `./fitxers/`. This must happen before any import method runs.
+
+    Expected console output for each extracted file:
+
+    ```
+    El fitxer: 02021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 03021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 04021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 05021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 06021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 07021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    El fitxer: 08021606.DAT s'ha afegit a la carpeta "./fitxers/"
+    ```
+  </Step>
+
+  <Step title="Import autonomous communities">
+    Call `Importacions.importarComunitatsAutonomes()`.
+
+    Expected output:
+    ```
+    La taula de Comunitats Autonomes s'ha importat correctament.
+    ```
+  </Step>
+
+  <Step title="Import provinces">
+    Call `Importacions.importarProvincies()`. This step requires `comunitats_autonomes` to be populated because it looks up `comunitat_aut_id` by INE code.
+
+    Expected output:
+    ```
+    La taula de Provincies s'ha importat correctament.
+    ```
+  </Step>
+
+  <Step title="Import municipalities">
+    Call `Importacions.importarMunicipis()`. Requires `provincies` to be populated.
+  </Step>
+
+  <Step title="Import elections">
+    Call `Importacions.importarEleccions()`. This creates the parent election record with name `Eleccions-06-2016` and the election date read from `02021606.DAT`.
+  </Step>
+
+  <Step title="Import election–municipality data">
+    Call `Importacions.importarEleccionsMunicipi()`. Requires both `eleccions` and `municipis` to be populated. Reads turnout and vote-count totals from `05021606.DAT`.
+  </Step>
+
+  <Step title="Import persons">
+    Call `Importacions.importarPersones()`. Populates the `persones` table with candidate names and birth dates from `04021606.DAT`.
+  </Step>
+
+  <Step title="Import candidatures">
+    Call `Importacions.importarCandidatures()`. Requires `eleccions` to be populated for the `eleccio_id` lookup.
+  </Step>
+
+  <Step title="Import candidates">
+    Call `Importacions.importarCandidats()`. Requires `persones`, `candidatures`, and `provincies` to be populated.
+  </Step>
+
+  <Step title="Import votes per province">
+    Call `Importacions.importarVotsProvincies()`. Requires `provincies` and `candidatures`.
+  </Step>
+
+  <Step title="Import votes per autonomous community">
+    Call `Importacions.importarVotsCandidatures_ca()`. Reads from the same `08021606.DAT` file but targets community-level aggregate rows.
+  </Step>
+
+  <Step title="Import votes per municipality">
+    Call `Importacions.importarVotsMunicipis()`. Requires `municipis`, `eleccions`, and `candidatures`.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+**`SQLException: Duplicate entry`** — The table already contains data. Truncate the table and all dependent tables, then re-run from that step.
+
+**`IOException: ./fitxers/xxxxxxxx.DAT (No such file or directory)`** — The ZIP extraction step did not complete successfully, or the file is not present in the ZIP. Verify the archive contents and re-run `descomprimirDATsZip()`.
+
+**`NullPointerException` or `no result` during a lookup** — A parent table was not imported, or was imported with errors, so the foreign-key lookup returned no result. Check the console output for error stack traces from earlier steps.
+
+**`SQLException: Connection refused`** — MySQL is not reachable at `192.168.56.101`. Check that the database server is running and that the host is accessible from the machine running the import.
+
+<Tip>
+  Run the import from within the IDE debugger the first time so you can inspect the exact line and field values when a parsing or SQL error occurs.
+</Tip>

@@ -1,0 +1,50 @@
+---
+title: Categoria 3 — Subqueries
+description: SQL queries using subqueries to filter, compare, and derive values from the elections database through nested SELECT statements.
+---
+
+Categoria 3 uses subqueries — `SELECT` statements nested inside another query — to answer questions that require intermediate results. Subqueries can appear in the `WHERE` clause, the `FROM` clause, or the `SELECT` list.
+
+## Subquery patterns in the elections schema
+
+The following patterns are representative of how subqueries are applied to this dataset:
+
+<AccordionGroup>
+  <Accordion title="Filtering with a scalar subquery">
+  A subquery in the `WHERE` clause that returns a single value can be used for comparisons. For example, finding provinces that received more votes than the average across all provinces uses a scalar subquery to compute that average:
+
+  ```sql
+  -- Pattern: value compared against a scalar subquery result
+  WHERE vots > (SELECT AVG(vots) FROM vots_candidatures_prov)
+  ```
+  </Accordion>
+
+  <Accordion title="Filtering with IN and a subquery">
+  `IN (subquery)` tests whether a value appears in the set returned by the subquery. This is useful for filtering, for example, to find all candidates who belong to parties that won at least one seat:
+
+  ```sql
+  -- Pattern: membership test against a subquery result set
+  WHERE candidatura_id IN (
+      SELECT candidatura_id
+      FROM vots_candidatures_prov
+      WHERE candidats_obtinguts > 0
+  )
+  ```
+  </Accordion>
+
+  <Accordion title="Derived tables in FROM">
+  A subquery in the `FROM` clause acts as an inline view (derived table). This allows aggregation to be computed first, then filtered or joined in the outer query.
+  </Accordion>
+
+  <Accordion title="Correlated subqueries">
+  A correlated subquery references columns from the outer query and is re-evaluated for each row. This is useful for row-by-row comparisons, such as finding the top vote-getter per province.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+The specific queries for this category are maintained in the project source file `Consultes_Categoria_3.md`. Refer to that file for the complete, tested query list.
+</Note>
+
+<Tip>
+Subqueries are often interchangeable with `JOIN` operations. When performance matters, test both approaches — MySQL's query optimizer may handle one more efficiently depending on table size and indexing.
+</Tip>

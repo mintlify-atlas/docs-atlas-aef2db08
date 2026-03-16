@@ -1,0 +1,58 @@
+---
+title: Import overview
+description: Overview of the Eleccions Generals data import pipeline, including import order, source files, and database connection details.
+---
+
+The import system loads all electoral data from INE fixed-width `.DAT` files into the MySQL database. Each import method maps to a specific source file and a specific database table. Because several tables reference others via foreign keys, imports must run in a fixed order.
+
+<Note>
+  The JDBC connection is hardcoded in `Main.java` with host `192.168.56.101`, database `mydb`, and user `perepi`. Make sure this host is reachable and the schema is created before running any imports.
+</Note>
+
+## Import order
+
+The dependency chain below determines the required execution order. Importing a table before its dependencies will cause foreign-key lookup failures.
+
+```
+comunitats_autonomes
+  └─ provincies
+       └─ municipis
+            └─ eleccions
+                 └─ eleccions_municipis
+                      └─ persones
+                           └─ candidatures
+                                └─ candidats
+                                     └─ vots_provincies
+                                     └─ vots_ca
+                                     └─ vots_municipis
+```
+
+## All import methods
+
+| Method | Source file | Target table(s) |
+|--------|------------|----------------|
+| `importarComunitatsAutonomes()` | `07021606.DAT` | `comunitats_autonomes` |
+| `importarProvincies()` | `07021606.DAT` | `provincies` |
+| `importarMunicipis()` | `05021606.DAT` | `municipis` |
+| `importarEleccions()` | `02021606.DAT` | `eleccions` |
+| `importarEleccionsMunicipi()` | `05021606.DAT` | `eleccions_municipis` |
+| `importarPersones()` | `04021606.DAT` | `persones` |
+| `importarCandidatures()` | `03021606.DAT` | `candidatures` |
+| `importarCandidats()` | `04021606.DAT` | `candidats` |
+| `importarVotsProvincies()` | `08021606.DAT` | `vots_provincies` |
+| `importarVotsCandidatures_ca()` | `08021606.DAT` | `vots_ca` |
+| `importarVotsMunicipis()` | `06021606.DAT` | `vots_municipis` |
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="File format" icon="file-lines" href="/import/file-format">
+    How INE fixed-width .DAT files are structured and how the parser reads field positions.
+  </Card>
+  <Card title="Running imports" icon="play" href="/import/running-imports">
+    Step-by-step guide to executing the full import sequence against a live database.
+  </Card>
+  <Card title="ZIP extraction" icon="file-zipper" href="/file-processing/zip-extraction">
+    How TractarFitxers extracts .DAT files from the source ZIP archive before import.
+  </Card>
+</CardGroup>

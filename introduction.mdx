@@ -1,0 +1,67 @@
+---
+title: Introduction
+description: A Java-based data platform for importing and querying Spanish general elections data from official INE .DAT files into a MySQL relational database.
+---
+
+# Eleccions Generals
+
+**Eleccions Generals** is a database project for processing, storing, and querying Spanish general election results. It reads official fixed-width `.DAT` files published by Spain's Instituto Nacional de Estadística (INE), imports them into a relational MySQL database, and provides a structured SQL query library for electoral analysis.
+
+## What this project does
+
+The project has three main components working together:
+
+<CardGroup cols={3}>
+  <Card title="File Processing" icon="file-zipper" href="/file-processing/zip-extraction">
+    Extracts `.DAT` data files from official INE ZIP archives into a working directory before import.
+  </Card>
+  <Card title="Data Import" icon="database" href="/import/overview">
+    Java importers read each fixed-width `.DAT` file and populate the MySQL database tables in the correct dependency order.
+  </Card>
+  <Card title="SQL Queries" icon="magnifying-glass" href="/queries/overview">
+    A structured library of SQL queries demonstrating aggregation, JOINs, subqueries, and window functions against the election data.
+  </Card>
+</CardGroup>
+
+## Data coverage
+
+The project covers the **2016 Spanish General Elections** (`02201606` data series), with data structured at three geographic levels:
+
+- **Comunitats Autònomes** — 17 autonomous communities
+- **Provincies** — 52 provinces with seat allocations
+- **Municipis** — all municipalities with polling station counts and vote breakdowns
+
+## Database schema overview
+
+The MySQL database (`mydb`) contains 11 tables that model the complete electoral data hierarchy:
+
+| Table | Description |
+|---|---|
+| `comunitats_autonomes` | Spain's 17 autonomous communities |
+| `provincies` | Provinces with INE codes and seat counts |
+| `municipis` | Municipalities linked to provinces |
+| `eleccions` | Election events with date metadata |
+| `eleccions_municipis` | Per-municipality vote totals |
+| `persones` | Candidate personal data |
+| `candidatures` | Political parties and coalitions |
+| `candidats` | Candidate–party–province assignments |
+| `vots_candidatures_mun` | Votes per party per municipality |
+| `vots_candidatures_prov` | Votes and seats won per party per province |
+| `vots_candidatures_ca` | Votes per party per autonomous community |
+
+## Quick links
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Set up the database and run your first import in minutes
+  </Card>
+  <Card title="Data model" icon="sitemap" href="/data-model/overview">
+    Understand the full schema and table relationships
+  </Card>
+  <Card title="Import guide" icon="upload" href="/import/overview">
+    Learn how data is parsed from INE .DAT files
+  </Card>
+  <Card title="SQL query reference" icon="code" href="/queries/overview">
+    Browse all 15+ documented SQL queries by category
+  </Card>
+</CardGroup>

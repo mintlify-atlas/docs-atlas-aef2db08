@@ -1,0 +1,144 @@
+---
+title: Categoria 1 — Aggregation, ordering, and string functions
+description: Ten SQL queries demonstrating aggregation functions, ordering, string manipulation, pattern matching, and comparison operators against the Eleccions Generals database.
+---
+
+These queries cover foundational MySQL techniques: aggregate functions (`COUNT`, `AVG`, `MAX`), grouping, ordering, string functions (`CONCAT`, `LEFT`, `LOWER`, `UPPER`, `SUBSTRING`, `LENGTH`), date functions (`YEAR`, `MONTH`), and pattern matching (`LIKE`, `RLIKE`).
+
+---
+
+## 1. Person ID, name, and full name for people born in 1990
+
+```sql
+SELECT persona_id, CONCAT(nom, cog1) AS nom_complet
+    FROM persones
+WHERE YEAR(data_naixement) = 1990;
+```
+
+<Tip>
+`YEAR()` extracts the year component from a `DATE` or `DATETIME` column. The alias `nom_complet` is assigned using `AS`. `CONCAT` joins two string columns without a separator — add one as a third argument if needed, e.g. `CONCAT(nom, ' ', cog1)`.
+</Tip>
+
+---
+
+## 2. Count of female persons with no second surname registered
+
+```sql
+SELECT COUNT(*)
+    FROM persones
+WHERE sexe = 'F' AND cog2 IS NULL;
+```
+
+`COUNT(*)` counts all matching rows regardless of `NULL` values in individual columns. The `IS NULL` predicate tests whether `cog2` has no value — using `= NULL` would not work in SQL.
+
+---
+
+## 3. Valid, blank, and null votes where polling stations > 2, ordered by municipality
+
+```sql
+SELECT municipi_id, vots_valids, vots_blanc, vots_nuls
+    FROM eleccions_municipis
+WHERE num_meses > 2
+ORDER BY municipi_id;
+```
+
+The `WHERE` clause filters rows to municipalities with more than two polling stations (`num_meses > 2`). `ORDER BY` sorts the result ascending by `municipi_id` — the default direction when no `ASC`/`DESC` is specified.
+
+---
+
+## 4. Province ID, seats, and name with first letter lowercase and rest uppercase
+
+```sql
+SELECT provincia_id, num_escons,
+       CONCAT(LOWER(LEFT(nom,1)), UPPER(SUBSTRING(nom, 2, LENGTH(nom)))) AS nom
+    FROM provincies;
+```
+
+<AccordionGroup>
+  <Accordion title="String function breakdown">
+  - `LEFT(nom, 1)` — extracts the first character of the name.
+  - `LOWER(...)` — converts that character to lowercase.
+  - `SUBSTRING(nom, 2, LENGTH(nom))` — extracts everything from the second character to the end.
+  - `UPPER(...)` — converts the remainder to uppercase.
+  - `CONCAT(...)` — joins the two parts back together.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## 5. Candidates and votes obtained in the province of Girona
+
+```sql
+SELECT candidats_obtinguts, vots
+    FROM vots_candidatures_prov
+WHERE provincia_id = 26;
+```
+
+Filters `vots_candidatures_prov` to province 26 (Girona's INE province code). Returns the number of seats won (`candidats_obtinguts`) and the total votes received by each party in that province.
+
+---
+
+## 6. Males with DNI ending in 'H' born between 1990 and 1999
+
+```sql
+SELECT persona_id, sexe, dni, data_naixement
+    FROM persones
+WHERE YEAR(data_naixement) BETWEEN 1990 AND 1999
+AND dni LIKE '%H';
+```
+
+`BETWEEN ... AND ...` is inclusive on both ends. `LIKE '%H'` matches any DNI string that ends with the letter `H` — the `%` wildcard matches any sequence of characters before it.
+
+---
+
+## 7. Total persons whose name starts with 'R' and born in February
+
+```sql
+SELECT COUNT(*) quants
+    FROM persones
+WHERE nom RLIKE '^R' AND MONTH(data_naixement) = 2;
+```
+
+`RLIKE` (equivalent to `REGEXP`) applies a regular expression. `^R` anchors the match to the start of the string, so only names beginning with `R` are included. `MONTH()` extracts the month number — `2` corresponds to February. The alias `quants` is written without `AS` (both syntaxes are valid in MySQL).
+
+---
+
+## 8. Average emitted votes per municipality
+
+```sql
+SELECT municipi_id, AVG(vots_emesos)
+    FROM eleccions_municipis 
+GROUP BY municipi_id;
+```
+
+`AVG()` computes the mean of `vots_emesos` for each group. `GROUP BY municipi_id` creates one group per municipality, so the average is computed independently for each one.
+
+---
+
+## 9. Province with the most seats — province ID, INE code, and seat count
+
+```sql
+SELECT num_escons, provincia_id, codi_ine
+    FROM provincies
+ORDER BY num_escons DESC
+LIMIT 1;
+```
+
+`ORDER BY num_escons DESC` sorts all provinces from highest to lowest seat count. `LIMIT 1` returns only the top row, giving the single province with the maximum number of seats.
+
+---
+
+## 10. Full name under 20 characters with combined ID/gender column
+
+```sql
+SELECT CONCAT(nom, cog1, cog2) AS nom_complet,
+       CONCAT(persona_id, "/", sexe) AS "id/sexe"
+    FROM persones
+WHERE LENGTH(CONCAT(nom, cog1, cog2)) < 20;
+```
+
+`LENGTH()` returns the byte length of a string. The `WHERE` clause filters to rows where the concatenated full name (first name + both surnames) is shorter than 20 characters. The second computed column combines `persona_id` and `sexe` with a `/` separator; the alias `"id/sexe"` is quoted because it contains a special character.
+
+<Note>
+If `cog2` is `NULL` for a row, `CONCAT(nom, cog1, cog2)` returns `NULL` in standard SQL. MySQL's `CONCAT` returns `NULL` if any argument is `NULL`, so persons with no second surname are excluded from this result set unless `COALESCE(cog2, '')` is used instead.
+</Note>

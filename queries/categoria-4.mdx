@@ -1,0 +1,95 @@
+---
+title: Categoria 4 — Window functions
+description: SQL query using OVER and PARTITION BY window functions to compute per-province maximum votes and identify election winners without collapsing rows.
+---
+
+Categoria 4 introduces window functions — aggregate calculations applied across a defined partition of rows, without reducing the result to a single grouped row. Unlike `GROUP BY`, window functions preserve every input row while adding computed values alongside them.
+
+## Key concepts
+
+| Syntax | What it does |
+|---|---|
+| `OVER (PARTITION BY col)` | Defines the window: rows are partitioned by `col`, and the function is applied within each partition independently. |
+| `MAX(...) OVER (PARTITION BY ...)` | Returns the maximum value within each partition, repeated on every row in that partition. |
+| `IF(condition, true_val, false_val)` | MySQL conditional expression — returns `true_val` when `condition` holds, otherwise `false_val`. |
+
+---
+
+## Q1. Winners per election per province
+
+This query produces one row per party per province per election. It shows the province name, the party's short name, its total votes, the maximum votes obtained by any party in that province (computed as a window), and a binary flag indicating whether that row is the winner.
+
+```sql
+SELECT p.nom AS Provincia,
+       c.nom_curt AS Candidatura,
+       vcp.vots,
+       MAX(vcp.vots)
+           OVER (PARTITION BY vcp.provincia_id) AS vots_guanyador,
+       IF(vots IN (
+           SELECT MAX(vots)
+               FROM vots_candidatures_prov vcp
+           INNER JOIN candidatures c ON c.candidatura_id = vcp.candidatura_id
+           GROUP BY vcp.provincia_id, c.eleccio_id
+       ), 1, 0) AS Guanyadors
+    FROM vots_candidatures_prov vcp
+INNER JOIN candidatures c ON c.candidatura_id = vcp.candidatura_id
+INNER JOIN provincies p ON vcp.provincia_id = p.provincia_id
+GROUP BY vcp.provincia_id, c.eleccio_id, vcp.candidatura_id
+ORDER BY p.nom, c.eleccio_id;
+```
+
+---
+
+## Query breakdown
+
+<AccordionGroup>
+  <Accordion title="Window function: MAX() OVER (PARTITION BY provincia_id)" defaultOpen={true}>
+  ```sql
+  MAX(vcp.vots) OVER (PARTITION BY vcp.provincia_id) AS vots_guanyador
+  ```
+
+  This computes the highest vote count obtained by any party within each province, and attaches that value to every row in the province's partition. Because it uses `OVER`, it does **not** collapse the rows — every party in the province still has its own row, but all of them share the same `vots_guanyador` value (the province maximum).
+  </Accordion>
+
+  <Accordion title="Winner flag: IF() with a subquery">
+  ```sql
+  IF(vots IN (
+      SELECT MAX(vots)
+      FROM vots_candidatures_prov vcp
+      INNER JOIN candidatures c ON c.candidatura_id = vcp.candidatura_id
+      GROUP BY vcp.provincia_id, c.eleccio_id
+  ), 1, 0) AS Guanyadors
+  ```
+
+  The subquery computes the maximum votes per province per election across all parties. The outer `IF` checks whether the current row's `vots` value is in that set of maximums. If it matches, the flag is `1` (winner); otherwise `0` (not the winner).
+  </Accordion>
+
+  <Accordion title="Joins">
+  - `INNER JOIN candidatures c` — resolves the party's short name (`nom_curt`) from its `candidatura_id`.
+  - `INNER JOIN provincies p` — resolves the province name (`nom`) from `provincia_id`.
+
+  Both joins are applied to `vots_candidatures_prov`, the central table holding vote totals per party per province.
+  </Accordion>
+
+  <Accordion title="GROUP BY and ORDER BY">
+  `GROUP BY vcp.provincia_id, c.eleccio_id, vcp.candidatura_id` collapses multiple records for the same party–province–election combination before the window function is applied.
+
+  `ORDER BY p.nom, c.eleccio_id` presents results alphabetically by province name, then chronologically by election.
+  </Accordion>
+</AccordionGroup>
+
+## What the result set shows
+
+Each row in the output represents a single party's result in a single province for a single election:
+
+| Column | Description |
+|---|---|
+| `Provincia` | Province name (e.g., `Barcelona`, `Girona`) |
+| `Candidatura` | Party short name (e.g., `PP`, `PSOE`) |
+| `vots` | Votes obtained by this party in this province |
+| `vots_guanyador` | Highest vote count by any party in the same province (window max) |
+| `Guanyadors` | `1` if this party won the province; `0` otherwise |
+
+<Note>
+This query requires MySQL 8.0+. Window functions (`OVER`, `PARTITION BY`) are not supported in MySQL 5.x.
+</Note>
